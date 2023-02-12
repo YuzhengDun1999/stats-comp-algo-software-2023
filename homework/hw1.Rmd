@@ -117,6 +117,9 @@ Now write a bash script which repeats the following cycle of steps for 99 times:
 **Question:** Does the size of the folder look reasonable relative to the sizes of the individual files inside it? (Use `ls -l -h` to list the files with the size info; `-l` is for "long.") If not, why would that be? How would this explain why [Github discourages you from commiting (large) binary files](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)?
 
 **Your answer:** (To be filled.)
+The size of the folder is much larger then the sizes of the individual files inside it. Since each time we used the "git commit", the files in objects will provide a snapshot of the repo at the time of the commit. Git knows not to make a new file for unchanged files. It will make a new file for the changed files (foo.tex and foo.pdf).
+
+If we want to commit large binary files, it will create a new file for the changed files every time. The speed is slow. It will also increase the storage.
 
 ## Things to commit and submit
 
@@ -138,3 +141,5 @@ Set up your own version of the `hiperglm` package as we discussed in the class a
 ## Things to commit and submit
 
 Hyperlink to the `hiperglm` repository on your Github account
+
+https://github.com/YuzhengDun1999/hiperglm
