@@ -1,7 +1,9 @@
 ---
-title: "Homework: Newton's method for generalized linear models"
+title: 'Homework: Newton''s method for generalized linear models'
 output:
-  html_notebook: 
+  html_document:
+    df_print: paged
+  html_notebook:
     code_folding: none
     highlight: textmate
 ---
@@ -94,7 +96,10 @@ More generally, we need to be concerned about uncertainty quantification.
 Can the (idealized) convergence criteria $| f(\boldsymbol{x}_\textrm{optimum}) - f(\boldsymbol{x}_\textrm{curr}) | \leq \epsilon_\textrm{tol}$ guarantee the accuracy of the resulting confidence interval estimates, at least in the asymtotic regime?
 Why?
 
+It cannot guarantee the accuracy of the resulting confidence interval estimates even in the asymtotic regime. It can only guarantee that we found the maximum of log likelihood within tolerance. It did not give any information of the second derivative of the log likelihood function at that point. The confidence interval depends on the Hessian matrix.
 ## Things to commit/submit
 
 * Link to the pull request.
+https://github.com/YuzhengDun1999/hiperglm/pull/2
+
 * (Optional) Answer to the bonus question.
