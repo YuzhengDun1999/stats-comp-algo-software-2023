@@ -218,6 +218,9 @@ Selectively turn on and off SSE, AVX, and FMA to see how each option affects the
 Finally, turn on both AVX and FMA and check the resulting performances.
 Report what you find.
 
+The test runs on JHPCE compute node 127. For default, the median time of dgemm_eigen is 180 ms. Our method takes about 829 ms. By turning on AVX, the median time is 92.6ms. By turning on FMA, the median time of dgemm_eigen is 65.2ms.  Our method takes about 830ms. By turning on AVX and FMA, the median time of dgemee_eigen is 64.5ms. Our method take about 960ms. By turning on AVX, FMA, and tuning off SSE, the median time of dgemm_eigen is 86.5ms. Our method takes about 955ms. By turning on all method, the median time of dgemm_eigen is 87.9ms. Our method takes about 954ms. 
+
+Our method did not have improvements using different compiler. The speed of dgemm_eigen increases a lot.
 ```{r, warning=FALSE, eval=FALSE}
 # Import `dgemm_eigen()` from lecture
 Rcpp::sourceCpp(file.path("..", "lecture", "src", "gemm_eigen.cpp"), rebuild = TRUE)
@@ -225,5 +228,7 @@ Rcpp::sourceCpp(file.path("..", "lecture", "src", "gemm_eigen.cpp"), rebuild = T
 
 ```{r, eval=FALSE}
 # Benchmark
-dgemm_eigen(A, B)
+bench::mark(dgemm_eigen(A, B))
+Rcpp::sourceCpp(file.path("src", "matmat.cpp"), rebuild = TRUE)
+bench::mark(col_oriented_matmat(A, B))
 ```
