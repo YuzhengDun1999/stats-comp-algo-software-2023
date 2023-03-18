@@ -1,5 +1,5 @@
 ---
-title: "Homework: Rcpp & Hardware-optimized computation"
+title: 'Homework: Rcpp & Hardware-optimized computation'
 html_notebook:
   code_folding: none
   highlight: textmate
@@ -54,7 +54,7 @@ for (i in 1:10^6) {
 **Questions:**
 What behavior do you observe above? How do you explain it?
 
-
+The last inner prod result disagrees with the previous ones every time I tried to run the code. Sometimes I got Inf for subseq_val. The reason is that vector in C starts from 0 instead of 1. This vector in C should be from 0 to 1022. The 1023 th element of that vector in C will be out of memory and get some unreasonable result.
 ## Part B: Sloppy matrix-matrix multiplication
 
 You have been told by the instructor that error-checking is particularly important in C++ and, in particular, that you should probably check for the dimension compatibility before you multiply two matrices in Rcpp(Eigen).
@@ -79,6 +79,8 @@ dgemm_eigen(A, B)
 
 **Questions:**
 What do you get as an output? What if you re-run the code chunk? Explain the observed behavior.
+
+The total dimension is 4*2. Element in each column is the same. The first column is always 1024 and the second column is not the same each time I re-run the code. Matrix in R is stored in column-major. Since the number of columns of A is 1024, C++ will try to get first 1024 element in memory to do the matrix multiplication. That's why the first column is always 1024. For the second column, C++ will get a number out of the memory of B. That's why the second column is not the same each time.
 
 ## Part C: Consequence of "tresspassing"
 
@@ -113,6 +115,9 @@ Running the same piece of code from an R console (instead of an RStudio session)
 * Why does the second code chunk run fine?
 * Modify `axpy_c.cpp` to make the function safer to use.
 
+R session aborted when I run the first code chunk since the size of y is 1000 and less than $10^7$. We are trying to get the element out of the memory of y.
+
+For the second code chunk, the condition for executing the for loop is i<1000. We only trying to get the first 1000 elements of x and y.  
 
 # Exercise 3: Multiplying two matrices ain't quite what you learned in your linear algebra class
 
@@ -141,6 +146,7 @@ B <- matrix(rnorm(n_inner * n_col_out), nrow = n_inner, ncol = n_col_out)
 
 ```{r}
 # Check the output of `row_col_dot_matmat`
+all.equal(row_col_dot_matmat(A, B), A %*% B)
 ```
 
 ## Part B: Going one step beyond your linear algebra class
@@ -150,16 +156,20 @@ $$\boldsymbol{A} \cdot \boldsymbol{B} = \big[ \, \boldsymbol{A} \boldsymbol{b}_1
 Recalling from lecture that "column-oriented" matrix-vector multiplication is more efficient than "row-oriented" one for R matrices, implement `col_oriented_matmat` (in `matmat.cpp`) that loops through each column of $\boldsymbol{B}$ applying the column-oriented matrix-vector multiplication.
 Then compare performances of `row_col_dot_matmat` and `col_oriented_matmat` (but only after you test your column-oriented implementation).
 Which one is faster and why?
+Time of `col_oriented_matmat` is 813 ms (median). Time of `row_col_dot_matmat` is 6.01 s (median). `col_oriented_matmat` is faster. R stored matrix in column-major and looping through rows will take more time to get the element in memory.
 
 ```{r}
 # Check and benchmark
+all.equal(col_oriented_matmat(A, B), A %*% B)
+bench::mark(row_col_dot_matmat(A, B))
+bench::mark(col_oriented_matmat(A, B))
 ```
 
 Also compare with performance of the matrix-matrix multiplication via `%*%` in R, which uses whatever the BLAS library your R was configured with.
 (You can find out which BLAS library R is using via `sessionInfo()` or `extSoftVersion()`.) 
-
+`%*%` takes about 490 ms (median) and is the fastest.
 ```{r}
-# Fill in
+bench::mark(A %*% B)
 ```
 
 When benchmarking alternative implementations (or alternative algorithms, more generally), keep in mind that the relative performance depends significantly on the size of a test problem.
@@ -210,7 +220,7 @@ Report what you find.
 
 ```{r, warning=FALSE, eval=FALSE}
 # Import `dgemm_eigen()` from lecture
-Rcpp::sourceCpp(file.path("..", "lecture", "src", "gemm_eigen.cpp"))
+Rcpp::sourceCpp(file.path("..", "lecture", "src", "gemm_eigen.cpp"), rebuild = TRUE)
 ```
 
 ```{r, eval=FALSE}

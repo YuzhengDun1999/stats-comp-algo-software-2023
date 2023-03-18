@@ -1,6 +1,8 @@
 ---
 title: 'Homework: Numerical linear algebra'
 output:
+  html_document:
+    df_print: paged
   html_notebook:
     code_folding: none
     highlight: textmate
@@ -43,6 +45,10 @@ What are relative speeds among the algorithms?
 Do relative speeds agree with what you expect from the complexity analyses?
 If not (quite), why might that be?
 
+Solving via LU decomposition takes about 150 ms (median), solving via cholesky decomposition takes about 143 ms (median), solving via QR decomposition takes about 588 ms (median).
+
+Theoretically, complexity of solving via LU decomposition is $\frac{2}{3}p^3+2p^2$, complexity of solving via Cholesky decomposition is $\frac{1}{3}p^3+2p^2$, complexity of solving via QR decomposition is $\frac{4}{3}p^3$. Roughly, solving via LU decomposition should be two times slower than solving via Cholesky decomposition. Solving via QR decomposition should be four times slower than solving via Cholesky decomposition. The relative speed of solving via cholesky decomposition and solving via QR decomposition is expected. The relative speed between solving via cholesky decomposition and solving via LU decomposition is not expected. The reason may be that R needs to allocate a new memory space for L matrix after Cholesky decomposition.
+
 **Note:**
 I misspoke about the R's built-in `chol()` function during the lecture:
 when applied to a positive-definite `A`, the function actually returns an _upper-triangular_ matrix `R` such that `t(R) %*% R == A`.
@@ -56,7 +62,9 @@ A <- rand_positive_def_matrix(mat_size, cond_num = 1e3)
 b <- rnorm(mat_size)
 
 solve_via_cholesky <- function(A, b) {
-  # Fill in
+  L = chol(A)
+  x = backsolve(L, backsolve(L, b, transpose = TRUE))
+  return(x)
 }
 
 bench::mark(
@@ -66,7 +74,7 @@ bench::mark(
   solve_via_cholesky(A, b)
 )
 bench::mark(
-  # Solve via QR decomposition
+  qr.solve(qr(A, LAPACK = TRUE), b)
 )
 ```
 
@@ -88,6 +96,7 @@ What is the relative difference in $\ell^2$-norm?
 How about the coordinate-wise relative differences?
 Are the observed magnitudes of the differences what you'd expect?
 
+The relative difference in $\ell^2$-norm is 5.6e-16 ($2^{-50.7}$). The coordinate-wise relative differences is 9.5e-13 ($2^{-40}$). The observed magnitudes of the differences is what I expect. 'long double' provides 12 more digits precision than 'double' type. The first 52 digits should be the same. The relative difference two forms should be around $2^{-52}$ 
 ```{r, eval=FALSE}
 Rcpp::sourceCpp(file.path("src", "matvec_double.cpp"))
 Rcpp::sourceCpp(file.path("src", "matvec_ldouble.cpp"))
@@ -98,8 +107,18 @@ mat_size <- 1024L
 A <- rand_positive_def_matrix(mat_size, cond_num = 1e3)
 x <- rnorm(mat_size)
 
-# Fill in
+Ax_double = matvec_double(A, x)
+Ax_ldouble = matvec_ldouble(A, x)
 
+rel_diff_l2 = function(x0, x1){
+  return(sqrt(sum((x0 - x1) ^ 2)) / sqrt(sum(x0 ^ 2)))
+}
+rel_diff_coordinate = function(x0, x1){
+  return(abs(x0 - x1) / abs(x0))
+}
+Ax_rel_diff_l2 = rel_diff_l2(Ax_ldouble, Ax_double)
+Ax_rel_diff_coordinate = rel_diff_coordinate(Ax_ldouble, Ax_double)
+max(Ax_rel_diff_coordinate)
 ```
 
 ### Task &#x2F06;
@@ -111,6 +130,7 @@ Then solve a positive-definite system $\bA \bx = \bb$ for $\bx$ using the three 
 Which algorithm appears to be more accurate than the others? 
 Visually demonstrate your answer.
 
+The LU decomposition appears to be more accurate than others.
 ```{r, eval=FALSE}
 set.seed(1918)
 cond_num <- 1e6
@@ -121,8 +141,17 @@ mat_size <- 1024L
 A <- rand_positive_def_matrix(mat_size, cond_num)
 x <- rnorm(mat_size)
 
-# Fill in
+b = matvec_ldouble(A, x)
+x_lu = solve(A, b)
+x_chol = solve_via_cholesky(A, b)
+x_qr = qr.solve(qr(A, LAPACK = TRUE), b)
 
+lu_diff = rel_diff_coordinate(x_lu, x)
+chol_diff = rel_diff_coordinate(x_chol, x)
+qr_diff = rel_diff_coordinate(x_qr, x)
+
+result_df = data.frame(method = c(rep('LU', mat_size), rep('Cholesky', mat_size), rep('QR', mat_size)), diff = log(c(lu_diff, chol_diff, qr_diff)))
+boxplot(diff ~ method, data = result_df, ylab = "relative coordinate difference in log10 scale")
 ```
 
 ### Task &#x4E09;
@@ -139,6 +168,9 @@ We also vary the condition number of $\bA$ and assess whether the results would 
 * Vary the condition number in the range $10^6 \sim 10^{12}$, e.g. by trying $10^6$, $10^9$, and $10^{12}$.
 * Do you see any patterns in the numerical errors across the three algorithms, metrics, and/or condition numbers? Show some plots to support your conclusion.
 
+When condition number is $10^6$ and $10^9$, QR has more numerical error in all metrics compared with other two methods and Cholesky has the smallest error in all three methods under all metrics. When condition number is $10^12$, QR method has the similar results as LU and Cholesky has still the smallest error.
+
+As the condition number increase, the numerical error also increase and linearly in log scale. We can see this from the scale of the y-axis.
 **Note:** 
 The QR solver will throw an error when the system is ill-condition enough that the numerical solution might not be very accurate. 
 To force it to return the solution in any case, set `tol = .Machine$double.eps`.
@@ -150,8 +182,7 @@ source(file.path("R", "num_linalg_sim_study_helper.R"))
 n_sim <- 32L
 mat_size <- 512L
 cond_num <- 1e6
-metrics <- c("norm", "median", "five_percentile", "ninety_five_percentile")
-  # TODO: add another metric and modify the helper script accordingly
+metrics <- c("norm", "median", "five_percentile", "ninety_five_percentile", "mean")
 
 rel_error_list <- lapply(
   c("lu", "chol", "qr"), 
@@ -163,7 +194,9 @@ for (sim_index in 1:n_sim) {
   x <- rnorm(mat_size) 
   b <- matvec_ldouble(A, x)
   x_approx <- list( 
-    # Fill in
+    lu = solve(A, b),
+    chol = solve_via_cholesky(A, b),
+    qr = qr.solve(qr(A, LAPACK = TRUE), b, tol=.Machine$double.eps)
   )
   for (method in c("lu", "chol", "qr")) {
     rel_error <- lapply(
@@ -177,6 +210,107 @@ for (sim_index in 1:n_sim) {
   }
 }
 
-# TODO: visually compare errors
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$norm, rel_error_list$chol$norm, rel_error_list$qr$norm)))
+boxplot(diff ~ method, data = result_df, ylab = "l2 norm difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$median, rel_error_list$chol$median, rel_error_list$qr$median)))
+boxplot(diff ~ method, data = result_df, ylab = "median of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$five_percentile, rel_error_list$chol$five_percentile, rel_error_list$qr$five_percentile)))
+boxplot(diff ~ method, data = result_df, ylab = "five_percentile of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$ninety_five_percentile, rel_error_list$chol$ninety_five_percentile, rel_error_list$qr$ninety_five_percentile)))
+boxplot(diff ~ method, data = result_df, ylab = "ninety_five_percentile of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$mean, rel_error_list$chol$mean, rel_error_list$qr$mean)))
+boxplot(diff ~ method, data = result_df, ylab = "mean of coordinate difference in log10 scale")
+
+
+cond_num <- 1e9
+rel_error_list <- lapply(
+  c("lu", "chol", "qr"), 
+  function(method) pre_allocate_error_list(n_sim, metrics)
+)
+
+for (sim_index in 1:n_sim) {
+  A <- rand_positive_def_matrix(mat_size, cond_num)
+  x <- rnorm(mat_size) 
+  b <- matvec_ldouble(A, x)
+  x_approx <- list( 
+    lu = solve(A, b),
+    chol = solve_via_cholesky(A, b),
+    qr = qr.solve(qr(A, LAPACK = TRUE), b, tol=.Machine$double.eps)
+  )
+  for (method in c("lu", "chol", "qr")) {
+    rel_error <- lapply(
+      metrics, 
+      function (metric) calc_rel_error(x, x_approx[[method]], metric)
+    )
+    names(rel_error) <- metrics
+    for (metric in names(rel_error)) {
+      rel_error_list[[method]][[metric]][sim_index] <- rel_error[[metric]]
+    }
+  }
+}
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$norm, rel_error_list$chol$norm, rel_error_list$qr$norm)))
+boxplot(diff ~ method, data = result_df, ylab = "l2 norm difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$median, rel_error_list$chol$median, rel_error_list$qr$median)))
+boxplot(diff ~ method, data = result_df, ylab = "median of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$five_percentile, rel_error_list$chol$five_percentile, rel_error_list$qr$five_percentile)))
+boxplot(diff ~ method, data = result_df, ylab = "five_percentile of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$ninety_five_percentile, rel_error_list$chol$ninety_five_percentile, rel_error_list$qr$ninety_five_percentile)))
+boxplot(diff ~ method, data = result_df, ylab = "ninety_five_percentile of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$mean, rel_error_list$chol$mean, rel_error_list$qr$mean)))
+boxplot(diff ~ method, data = result_df, ylab = "mean of coordinate difference in log10 scale")
+
+
+
+
+cond_num <- 1e12
+rel_error_list <- lapply(
+  c("lu", "chol", "qr"), 
+  function(method) pre_allocate_error_list(n_sim, metrics)
+)
+
+for (sim_index in 1:n_sim) {
+  A <- rand_positive_def_matrix(mat_size, cond_num)
+  x <- rnorm(mat_size) 
+  b <- matvec_ldouble(A, x)
+  x_approx <- list( 
+    lu = solve(A, b),
+    chol = solve_via_cholesky(A, b),
+    qr = qr.solve(qr(A, LAPACK = TRUE), b, tol=.Machine$double.eps)
+  )
+  for (method in c("lu", "chol", "qr")) {
+    rel_error <- lapply(
+      metrics, 
+      function (metric) calc_rel_error(x, x_approx[[method]], metric)
+    )
+    names(rel_error) <- metrics
+    for (metric in names(rel_error)) {
+      rel_error_list[[method]][[metric]][sim_index] <- rel_error[[metric]]
+    }
+  }
+}
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$norm, rel_error_list$chol$norm, rel_error_list$qr$norm)))
+boxplot(diff ~ method, data = result_df, ylab = "l2 norm difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$median, rel_error_list$chol$median, rel_error_list$qr$median)))
+boxplot(diff ~ method, data = result_df, ylab = "median of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$five_percentile, rel_error_list$chol$five_percentile, rel_error_list$qr$five_percentile)))
+boxplot(diff ~ method, data = result_df, ylab = "five_percentile of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$ninety_five_percentile, rel_error_list$chol$ninety_five_percentile, rel_error_list$qr$ninety_five_percentile)))
+boxplot(diff ~ method, data = result_df, ylab = "ninety_five_percentile of coordinate difference in log10 scale")
+
+result_df = data.frame(method = c(rep('LU', n_sim), rep('Cholesky', n_sim), rep('QR', n_sim)), diff = log(c(rel_error_list$lu$mean, rel_error_list$chol$mean, rel_error_list$qr$mean)))
+boxplot(diff ~ method, data = result_df, ylab = "mean of coordinate difference in log10 scale")
 
 ```
